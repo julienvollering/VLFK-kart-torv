@@ -1,3 +1,9 @@
+data/*
+output/*
+
+# QGIS files
+*.qgz
+
 # History files
 .Rhistory
 .Rapp.history
