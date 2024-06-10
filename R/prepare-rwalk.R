@@ -41,3 +41,8 @@ friction <- rasterize(filter(veglenke, vegkategori == "P" | vegkategori == "S"),
                       friction, field=0, update=TRUE)
 plot(friction)
 writeRaster(friction, "output/rwalk-friction.tif",overwrite=TRUE)
+
+friction <- rasterize(filter(veglenke, vegkategori == "K" | vegkategori == "F" | 
+                               vegkategori == "R"| vegkategori == "E"), 
+                      friction, field=0, update=TRUE)
+writeRaster(friction, "output/rwalk-friction2.tif",overwrite=TRUE)
