@@ -8,38 +8,50 @@ sa <- rast("output/samplingMatrix.tif")
 plot(sa)
 
 # Read data with coordinates and attributes
-df <- read_csv(file="output/samplingMatrix.csv")
+df <- read_csv(file="output/samplingMatrix.csv") |> 
+  filter(road == 0)
 summary(df)
-cor(select(df, c('DTM','slope','TPI','TRI','roughness','MRVBF','continentality')))
+df |> 
+  select(DTM, slope, TPI, TRI, roughness, MRVBF, continentality) |> 
+  cor()
 
 # Discard TRI and roughness for high correlation with slope 
-dfclhs <- select(df, rwalkcost, driveable, DTM, slope, TPI, MRVBF, continentality)
 tictoc::tic()
 clhsseeds <- 1:10 %>% 
   map(\(x) {
     set.seed(x)
-    clhs(dfclhs, size = N, 
-         can.include = which(df$rwalkcost <= 6000 & df$driveable == 1), 
+    clhs(x = select(df, rwalkcost, DTM, slope, TPI, MRVBF, continentality), 
+         size = N, 
+         can.include = which(df$rwalkcost < 3000 & df$driveable == 1 & df$canopy < 50), 
          cost = "rwalkcost",
-         iter = 1e7, simple = FALSE)
+         iter = 1e6, simple = FALSE)
   })
-tictoc::toc() #54217.87 sec elapsed
+tictoc::toc() #1939 sec elapsed
 write_rds(clhsseeds, file="output/makeCLHS.rds")
 # clhsseeds <- read_rds("output/makeCLHS.rds")
 
-plot(map_dbl(clhsseeds, \(x) x$obj[1e7]))
+plot(map_dbl(clhsseeds, \(x) x$obj[1e6]))
 clhsseedsdf <- map(clhsseeds, \(x) df[x$index_samples, ])
 clhsseedsdf <- map(clhsseedsdf, \(x) arrange(x, desc(rwalkcost)))
 bind_rows(clhsseedsdf, .id = "clhsseed") |> 
   st_as_sf(coords=c('x','y'), crs='EPSG:25833') |> 
   st_write('data/GIS/samplingDesign.gpkg', layer = 'primaryclhsseeds', append=FALSE)
 
-# Examine 10 25-point sets in GIS to choose the set with lowest objective function but feasible
-# clhsseeds <- read_rds("output/makeCLHS.rds")
-chosenindex <- 6
-clhsprimary <- df[clhsseeds[[chosenindex]]$index_samples, ] |> 
-  select(cell, x, y, DTM, slope, TPI, MRVBF, continentality) |> 
-  mutate(priority = 1)
+# Examine 10 25-point sets in GIS to choose the set that is most practical/feasible
+#clhsseeds <- read_rds("output/makeCLHS.rds")
+chosenindex <- 5
+# df |> 
+#   select(DTM, slope, TPI, MRVBF, continentality) |> 
+#   summary()
+# df[clhsseeds[[chosenindex]]$index_samples, ] |> 
+#   select(DTM, slope, TPI, MRVBF, continentality) |> 
+#   summary()
+# df |> 
+#   select(DTM, slope, TPI, MRVBF, continentality) |> 
+#   cor()
+# df[clhsseeds[[chosenindex]]$index_samples, ] |> 
+#   select(DTM, slope, TPI, MRVBF, continentality) |> 
+#   cor()
 
 # Secondary cLHS with rwalkcost from primary cLHS as starting points
 # rwalkcost2 also has a new friction layer to allow movement along all roads
@@ -55,32 +67,28 @@ reachcoords <- as.data.frame(reach <= 1000, xy=TRUE) |>
   select(x, y)
 reachcells <- cellFromXY(sa, reachcoords)
 
-dfclhs2 <- select(df, DTM, slope, TPI, MRVBF, continentality)
-mustinclude <- which(df$cell %in% clhsprimary$cell)
-caninclude <- which(df$cell %in% reachcells)
 set.seed(42)
 tictoc::tic()
-clhs2 <- clhs(dfclhs2, size = 25*10, 
-              #must.include = mustinclude, 
-              can.include = caninclude, use.cpp=TRUE,
-              iter = 1e6, simple = FALSE)
-tictoc::toc() #208 sec elapsed
-clhs2$index_samples %in% caninclude
+clhs2 <- clhs(x = select(df, DTM, slope, TPI, MRVBF, continentality), 
+              size = 20*10, 
+              #must.include = which(df$cell %in% clhsprimary$cell), 
+              can.include = which(df$cell %in% reachcells & df$canopy < 50), 
+              use.cpp=TRUE, iter = 1e7, simple = FALSE)
+tictoc::toc() #1008 sec elapsed
 plot(clhs2)
 
-write_rds(dfclhs2, file="output/makeCLHS2.rds")
+write_rds(clhs2, file="output/makeCLHS2.rds")
 
 clhssecondary <- df[clhs2$index_samples, ] |> 
-  select(cell, x, y, DTM, slope, TPI, MRVBF, continentality) |> 
-  mutate(priority = 2)
+  select(cell, x, y, DTM, slope, TPI, MRVBF, continentality)
 
-# Combine primary and secondary cLHS
-clhs <- bind_rows(clhsprimary, clhssecondary)
-clhspts <- st_as_sf(clhs, coords = c('x','y'), crs="EPSG:25833") |> 
-  select(priority, DTM, slope, TPI, MRVBF, continentality) |> 
+# Write secondary cLHS
+clhssecondary |> 
+  st_as_sf(coords = c('x','y'), crs="EPSG:25833") |> 
+  select(DTM, slope, TPI, MRVBF, continentality) |> 
   st_write('data/GIS/samplingDesign.gpkg', layer = 'clhs', append=FALSE)
 
-# cLHS can.include troubleshooting
+# Troubleshooting clhs::clhs 'can.include'
 
 df <- data.frame(
   a = runif(1000), 
