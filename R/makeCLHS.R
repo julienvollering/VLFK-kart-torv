@@ -89,23 +89,25 @@ clhssecondary |>
   st_write('data/GIS/samplingDesign.gpkg', layer = 'clhs', append=FALSE)
 
 # Troubleshooting clhs::clhs 'can.include'
+library(clhs)
 
 df <- data.frame(
   a = runif(1000), 
   b = rnorm(1000), 
   c = sample(LETTERS[1:5], size = 1000, replace = TRUE))
 
-res <- clhs(df, size = 50, progress = FALSE, simple = TRUE)
-str(res)
-
-res <- clhs(df, size = 50, use.cpp = TRUE, iter = 5000, progress = FALSE, simple = FALSE)
-str(res)
-plot(res)
-
-res <- clhs(df, size = 50, use.cpp = TRUE, iter = 5000, progress = FALSE, simple = FALSE,
+res1 <- clhs(df, size = 50, use.cpp = TRUE, iter = 5000, progress = FALSE, simple = FALSE,
             can.include = 1:500)
-res$index_samples
+range(res1$index_samples) # can.include correctly restricts range
 
-res <- clhs(df, size = 50, use.cpp = TRUE, iter = 5000, progress = FALSE, simple = FALSE,
-            must.include = 1:25, can.include = 1:500)
-res$index_samples
+res2 <- clhs(df, size = 50, use.cpp = TRUE, iter = 5000, progress = FALSE, simple = FALSE,
+             must.include = 1:25)  
+print(res2$index_samples, N=50) # must.include correctly guarantees selection
+range(res2$index_samples) 
+
+res3 <- clhs(df, size = 50, use.cpp = TRUE, iter = 5000, progress = FALSE, simple = FALSE,
+            can.include = 1:500, must.include = 1:25)
+range(res3$index_samples) # in combination with must.include, can.include does not restrict range
+print(res3$index_samples, N=50)
+
+sessionInfo()
