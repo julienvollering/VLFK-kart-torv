@@ -46,10 +46,6 @@ dat2 <- left_join(dat2, clhspts, by = join_by(punkt == Name)) |>
   st_as_sf() |> 
   st_transform(crs = "epsg:25833")
 
-# temp <- st_buffer(dat2[1,], dist = 3.5, nQuadSegs = 2)
-# plot(st_geometry(temp))
-# st_coordinates(temp)
-
 dat2 <- dat2 |> 
   st_zm(drop = TRUE) |> 
   pivot_longer(cols = 2:5, names_to = "retning", values_to = "depth_cm")
@@ -74,4 +70,4 @@ dat2 <- dat2 |>
 bind_rows(dat, dat2) |> 
   filter(!(is.na(depth_cm) & is.na(note))) |> 
   arrange(file, ptname) |> 
-  st_write("output/fielddata.gpkg", layer="depth")
+  st_write("output/fielddata.gpkg", layer="depth", append=FALSE)
